@@ -2906,6 +2906,7 @@ end)
 pcall(function() if S.antilag then S.antilag.set(false) end end)
 pcall(function() if S.aim then S.aim.cleanup() end end)
 pcall(function() if S.counters then S.counters.reset() end end)
+pcall(function() if S.openAnim then S.openAnim.cancel() end end)
 for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
 gui:Destroy()
 espGui:Destroy()
@@ -2969,7 +2970,7 @@ do
 local CROWN_B64 = table.concat({
 "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAQDAwMDAgQDAwMEBAQFBgoGBgUFBgwICQcKDgwPDg4MDQ0PERYTDxAVEQ0NExoTFRcY",
 "GRkZDxIbHRsYHRYYGRj/wAALCACAAIABAREA/8QAHQABAAICAwEBAAAAAAAAAAAAAAEHBAYCBQgDCf/EADIQAAEDAwMDAgQFBQEB",
-"AAAAAAECAwQABREGEiEHEzEiQQgyUWEUFUJxkSMzUoGxFqH/2gAIAQEAAD8A/P8ApSlKUpSlKUpSlKUpSlKUpSlKUpSlKUpSmKYp",
+"AAAAAAECAwQABREGEiEHEzEiQQgyUWEUFUJxkSMzUoGxFqH/2gAIAQEAAD8A/P8ApSlKUpSlKUpSlKUpSlKUpSlKUpSlKUpSlKUp",
 "U4NQRSmDTBpg1yqOPtTiopith1PpZ3TaopMkSWpCVAOhstgrQQlwJz8yQolIWOFEHHg1r1bDpXTKtSPTG0uvpLDW9KWGC6SSfKuQ",
 "EoSApSlE8BNa+fFRX07bnZDuxXbJ278cZ+mfrXA0wKmlKg1FKsfpnpiyalst/RcEQe9FZMl6TKkhpUSK224txxlG9PddKktoA5Hq",
 "x+rIro+1Wf1gW5JkWYSZMhc62Q27XJYfUT2dqAtGMnwres/uD9aq4+a33SctjTWjJ9wkxO69f2pFpYJJHbbDWVrGPfepofThVaGf",
@@ -2993,7 +2994,7 @@ local CROWN_B64 = table.concat({
 "Dq0xpS1QWUWSIlFiyWErU4QoIdfIOQoqcK3P4xjAqorvb5lg1NOtMhLkeVBkuR3E8pUhaFFJH78VsGntfPWy4F2+WmLfWC2W8Pnt",
 "vI4wFIdSMgj7hQr0T0Mv9tduxvenbpPbiQ8uy7Y62C684UkNs7/ZKlclQVjA5AOMWx0d1fe7b1FuF4/Bsh6fdJEd/sZeW+tCA0Rz",
 "zlKnAQf1HfnzkU58ceuNPXDqpG0BpeHFZTZlLk3h+O2lBfuD2CsLKeFKQkAFXncpQ9q8oGg8VB80PmlK5NrKHUrTjKTkZ+or9Q+p",
-"405qzoadVPPSZ9i1NZWnZbkR7a6wpxlOHdg4WUqRyn6A4+VQPm66fEDHjdGrLofVWlIGpDbx+F/NR/UTNjFKcNuNrA2PpSlAyD7c",
+"406qzoadVPPSZ9i1NZWnZbkR7a6wpxlOHdg4WUqRyn6A4+VQPm66fEDHjdGrLofVWlIGpDbx+F/NR/UTNjFKcNuNrA2PpSlAyD7c",
 "YJzVZXrWvT3SMuRcOlVskQ7u64tKZ61rBitKTkBoKUSFZUUqVxjZgZCiaqe1XJ22aihXdv1uxZDclO7nKkKCuf8AYr0n8S3TRnVW",
 "t731i0A9Ads1xSzPmQEvpQ8wtwJQpxKSfWFL9RxyCv8Aioen/R/U2vdR222x1xoDM5xSESH1hRwkEqUG0+ojjGTgZI5FWr1f1fov",
 "pX1BsXTTpc4u4WXTK2lXiYy9sVdZqVbl5WMj0nHjIyMDgVtvSfq9D6cdB7xqBpp+VqaI4/IjDYlxt5biCkLUdvpQFK3q9W7gJHCi",
@@ -3046,10 +3047,66 @@ if c:IsA("TextLabel") then c:Destroy() end
 end
 end)
 end
+do
+local A = {tweens = {}, active = false, scale = 1, pos = window.Position, token = 0}
+S.openAnim = A
+local function go(o, props, t, style, dir)
+local tw = TweenService:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
+table.insert(A.tweens, tw)
+tw:Play()
+return tw
+end
+function A.cancel()
+if not A.active then return end
+A.active = false
+A.token += 1
+for _, tw in ipairs(A.tweens) do pcall(function() tw:Cancel() end) end
+table.clear(A.tweens)
+uiScale.Scale = A.scale
+window.Position = A.pos
+local st = window:FindFirstChildOfClass("UIStroke")
+if st then st.Thickness = 1; st.Transparency = 0.3 end
+menuBtn.Rotation = 0
+end
+function A.play()
+A.cancel()
+A.active = true
+A.token += 1
+local my = A.token
+A.scale = uiScale.Scale
+A.pos = window.Position
+uiScale.Scale = A.scale * 0.6
+window.Position = A.pos + UDim2.fromOffset(0, 40)
+go(uiScale, {Scale = A.scale}, 0.5, Enum.EasingStyle.Back)
+go(window, {Position = A.pos}, 0.45, Enum.EasingStyle.Quint)
+local st = window:FindFirstChildOfClass("UIStroke")
+if st then
+st.Thickness = 1
+st.Transparency = 0.3
+go(st, {Thickness = 4, Transparency = 0}, 0.2)
+task.delay(0.2, function()
+if A.active and A.token == my then go(st, {Thickness = 1, Transparency = 0.3}, 0.45) end
+end)
+end
+menuBtn.Rotation = 0
+go(menuBtn, {Rotation = 360}, 0.55, Enum.EasingStyle.Quint)
+task.delay(0.6, function()
+if A.token == my then
+A.active = false
+table.clear(A.tweens)
+menuBtn.Rotation = 0
+end
+end)
+end
+end
 bind(menuBtn.Activated, function()
 if S.menuDrag and S.menuDrag.moved then return end
+if window.Visible and S.openAnim then S.openAnim.cancel() end
 window.Visible = not window.Visible
-if window.Visible then updateHome() end
+if window.Visible then
+if S.openAnim then S.openAnim.play() end
+updateHome()
+end
 end)
 do
 local D = {moved = false}

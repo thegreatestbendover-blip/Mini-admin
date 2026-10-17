@@ -27,13 +27,6 @@ end
 local function clean(k) return (tostring(k or ""):gsub("%s+", "")) end
 local function isValid(k) return keyHash(clean(k)) == KEY_HASH end
 local passed = false
-pcall(function()
-if env.MiniAdminKey and isValid(env.MiniAdminKey) then
-passed = true
-elseif isfile and readfile and isfile(KEY_FILE) and isValid(readfile(KEY_FILE)) then
-passed = true
-end
-end)
 if not passed then
 local sg = Instance.new("ScreenGui")
 sg.Name = "MiniAdminKey"
@@ -112,12 +105,6 @@ local closed = false
 local function trySubmit()
 if isValid(box.Text) then
 passed = true
-pcall(function()
-if writefile and isfolder and makefolder then
-if not isfolder("MiniAdmin") then makefolder("MiniAdmin") end
-writefile(KEY_FILE, clean(box.Text))
-end
-end)
 else
 status.Text = "Invalid key"
 end

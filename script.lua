@@ -2200,8 +2200,15 @@ off = Color3.fromRGB(110, 60, 140), track = Color3.fromRGB(100, 50, 134),
 stroke = Color3.fromRGB(190, 100, 240), accent = Color3.fromRGB(200, 120, 255),
 tint = Color3.fromRGB(110, 40, 150), button = Color3.fromRGB(160, 70, 220),
 },
+["Crown"] = {
+bg = Color3.fromRGB(6, 6, 8), panel = Color3.fromRGB(14, 14, 18),
+card = Color3.fromRGB(3, 3, 5), item = Color3.fromRGB(26, 26, 32),
+off = Color3.fromRGB(58, 58, 66), track = Color3.fromRGB(44, 44, 52),
+stroke = Color3.fromRGB(150, 153, 164), accent = Color3.fromRGB(205, 209, 222),
+tint = Color3.fromRGB(40, 42, 50), button = Color3.fromRGB(88, 91, 102),
+},
 }
-local ORDER = {"Light Red", "Dark Red", "Orange", "Yellow", "Green", "Light Blue", "Dark Blue", "Indigo", "Violet"}
+local ORDER = {"Light Red", "Dark Red", "Orange", "Yellow", "Green", "Light Blue", "Dark Blue", "Indigo", "Violet", "Crown"}
 local KEYS = {"bg", "panel", "card", "item", "off", "track", "stroke", "accent"}
 local function key(c)
 return math.floor(c.R * 255 + 0.5) .. "," .. math.floor(c.G * 255 + 0.5) .. "," .. math.floor(c.B * 255 + 0.5)

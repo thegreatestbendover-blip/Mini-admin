@@ -3059,6 +3059,7 @@ end
 function A.cancel()
 if not A.active then return end
 A.active = false
+A.closing = false
 A.token += 1
 for _, tw in ipairs(A.tweens) do pcall(function() tw:Cancel() end) end
 table.clear(A.tweens)
@@ -3098,15 +3099,47 @@ menuBtn.Rotation = 0
 end
 end)
 end
+function A.close()
+if A.closing then return end
+A.cancel()
+A.closing = true
+A.active = true
+A.token += 1
+local my = A.token
+A.scale = uiScale.Scale
+A.pos = window.Position
+go(uiScale, {Scale = A.scale * 0.6}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+go(window, {Position = A.pos + UDim2.fromOffset(0, 40)}, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+local st = window:FindFirstChildOfClass("UIStroke")
+if st then go(st, {Thickness = 4, Transparency = 0}, 0.15) end
+go(menuBtn, {Rotation = -360}, 0.35, Enum.EasingStyle.Quint)
+task.delay(0.32, function()
+if A.token ~= my then return end
+A.closing = false
+A.active = false
+table.clear(A.tweens)
+window.Visible = false
+uiScale.Scale = A.scale
+window.Position = A.pos
+if st then st.Thickness = 1; st.Transparency = 0.3 end
+menuBtn.Rotation = 0
+end)
+end
 end
 bind(menuBtn.Activated, function()
 if S.menuDrag and S.menuDrag.moved then return end
-if window.Visible and S.openAnim then S.openAnim.cancel() end
-window.Visible = not window.Visible
-if window.Visible then
-if S.openAnim then S.openAnim.play() end
+if S.openAnim then
+if window.Visible and not S.openAnim.closing then
+S.openAnim.close()
+else
+window.Visible = true
+S.openAnim.play()
 updateHome()
 end
+return
+end
+window.Visible = not window.Visible
+if window.Visible then updateHome() end
 end)
 do
 local D = {moved = false}
@@ -3138,7 +3171,9 @@ task.delay(0.15, function() D.moved = false end)
 end
 end)
 end
-bind(closeBtn.Activated, function() window.Visible = false end)
+bind(closeBtn.Activated, function()
+if S.openAnim and window.Visible then S.openAnim.close() else window.Visible = false end
+end)
 local minimized = false
 bind(minBtn.Activated, function()
 minimized = not minimized

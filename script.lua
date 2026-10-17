@@ -2368,7 +2368,7 @@ addSlider(sg, "Aim FOV (px)", 30, 600, A.fov, function(v) A.fov = v end)
 addSlider(sg, "Aim Speed", 1, 100, A.speed, function(v) A.speed = v end)
 end
 do
-local X = {busy = false, token = 0}
+local X = {busy = false, token = 0, tr = true, cache = {}, lastList = nil}
 S.search = X
 local SP = pages.Search
 local API = "https://scriptblox.com/api"
@@ -2387,6 +2387,19 @@ return r.Body
 end
 end
 return nil
+end
+local function translate(text)
+local url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=" .. HttpService:UrlEncode(text)
+local body = httpGet(url)
+if not body then return nil end
+local ok, d = pcall(function() return HttpService:JSONDecode(body) end)
+if not ok or type(d) ~= "table" or type(d[1]) ~= "table" then return nil end
+local out = {}
+for _, seg in ipairs(d[1]) do
+if type(seg) == "table" and type(seg[1]) == "string" then table.insert(out, seg[1]) end
+end
+if #out == 0 then return nil end
+return table.concat(out), (type(d[3]) == "string" and d[3] or "?")
 end
 local function hex(c)
 return string.format("#%02x%02x%02x", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
@@ -2452,6 +2465,11 @@ ClearTextOnFocus = false, BorderSizePixel = 0,
 corner(box, 6)
 stroke(box, C.stroke, 0.6, 1)
 local btnGroup = newGroup(SP, 40, 2)
+local trGroup = newGroup(SP, 40, 1)
+addToggle(trGroup, "Translate to English", function() return X.tr end, function(v)
+X.tr = v
+if X.lastList and X.rebuild then X.rebuild(X.lastList) end
+end)
 X.status = label(SP, "", {
 Size = UDim2.new(1, 0, 0, 16), TextSize = 12, TextColor3 = C.sub, LayoutOrder = nextOrder(SP),
 })
@@ -2468,18 +2486,37 @@ local r = row(X.list)
 label(r, "No results", {Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 12, 0, 0), TextColor3 = C.sub})
 return
 end
-for _, s in ipairs(list) do
+for idx, s in ipairs(list) do
 local f = flagsOf(s)
 local r = row(X.list)
-label(r, tostring(s.title or "Untitled"), {
+local tl = label(r, tostring(s.title or "Untitled"), {
 Size = UDim2.new(1, -130, 0, 20), Position = UDim2.new(0, 12, 0, 5),
 Font = Enum.Font.GothamBold, TextSize = 13, TextTruncate = Enum.TextTruncate.AtEnd,
 })
 local gname = (type(s.game) == "table" and s.game.name) or (s.isUniversal and "Universal") or "Unknown game"
-label(r, tostring(gname), {
+local gl = label(r, tostring(gname), {
 Size = UDim2.new(1, -130, 0, 14), Position = UDim2.new(0, 12, 0, 24),
 TextSize = 11, TextColor3 = C.sub, TextTruncate = Enum.TextTruncate.AtEnd,
 })
+if X.tr then
+local orig = tostring(s.title or "")
+task.spawn(function()
+task.wait(idx * 0.05)
+if orig == "" or not tl.Parent or not X.tr then return end
+local c = X.cache[orig]
+if not c then
+local tr, lang = translate(orig:sub(1, 200))
+if not tr then return end
+c = {tr = tr, lang = lang}
+X.cache[orig] = c
+end
+if not tl.Parent or not X.tr then return end
+if c.lang ~= "en" and c.tr:lower() ~= orig:lower() then
+tl.Text = c.tr
+gl.Text = tostring(gname) .. "  |  " .. c.lang .. ": " .. orig
+end
+end)
+end
 local parts = {}
 if f.key then table.insert(parts, '<font color="#FFC83C">KEY</font>') end
 if f.patched then table.insert(parts, '<font color="' .. hex(C.danger) .. '">PATCHED</font>') end
@@ -2529,12 +2566,15 @@ X.status.Text = "Couldn't reach ScriptBlox (blocked, down, or no HTTP support)"
 return
 end
 X.status.Text = #list .. (#list == 1 and " result" or " results")
+X.lastList = list
 rebuild(list)
 end)
 end
+X.rebuild = rebuild
 function X.clear()
 X.token += 1
 X.busy = false
+X.lastList = nil
 box.Text = ""
 X.status.Text = ""
 rebuild(nil)
@@ -2866,6 +2906,54 @@ local cg = newGroup(P, 40, 2)
 addToggle(cg, "FPS Counter", function() return S.fpsCounter end, T.setFps)
 addToggle(cg, "Ping Counter", function() return S.pingCounter end, T.setPing)
 end
+addSection(P, "Daily Reward")
+do
+local AC = {on = false, token = 0}
+S.autoclaim = AC
+local ACFILE = "MiniAdmin/autoclaim.txt"
+local function claim()
+task.spawn(function()
+local ok = pcall(function()
+local rs = game:GetService("ReplicatedStorage")
+local r = rs:WaitForChild("Databases", 5):WaitForChild("HalloweenEvent", 5):WaitForChild("ClaimDailyReward", 5)
+r:FireServer()
+end)
+if ok then notify("Daily reward claim sent") else notify("Daily reward not found (wrong game, or the event ended)") end
+end)
+end
+function AC.set(on)
+if on == AC.on then return end
+AC.on = on
+AC.token += 1
+pcall(function()
+if writefile and isfolder and makefolder then
+if not isfolder("MiniAdmin") then makefolder("MiniAdmin") end
+writefile(ACFILE, on and "1" or "0")
+end
+end)
+if on then
+local my = AC.token
+claim()
+task.spawn(function()
+while AC.on and AC.token == my do
+task.wait(1800)
+if AC.on and AC.token == my then claim() end
+end
+end)
+end
+end
+function AC.cleanup()
+AC.on = false
+AC.token += 1
+end
+local acg = newGroup(P, 40, 1)
+addToggle(acg, "Auto Claim Daily Reward", function() return AC.on end, AC.set)
+pcall(function()
+if isfile and readfile and isfile(ACFILE) and readfile(ACFILE):match("1") then
+task.delay(3, function() AC.set(true); refreshAll() end)
+end
+end)
+end
 local HttpService = game:GetService("HttpService")
 local CFG_DIR, CFG_SUB, AUTOLOAD = "MiniAdmin", "MiniAdmin/configs", "MiniAdmin/autoload.txt"
 local fsOK = (writefile and readfile and isfile and isfolder and makefolder and listfiles) and true or false
@@ -3090,6 +3178,7 @@ pcall(function() if S.aim then S.aim.cleanup() end end)
 pcall(function() if S.counters then S.counters.reset() end end)
 pcall(function() if S.openAnim then S.openAnim.cancel() end end)
 pcall(function() if S.search then S.search.cleanup() end end)
+pcall(function() if S.autoclaim then S.autoclaim.cleanup() end end)
 for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
 gui:Destroy()
 espGui:Destroy()

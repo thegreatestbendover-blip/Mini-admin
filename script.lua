@@ -2906,54 +2906,6 @@ local cg = newGroup(P, 40, 2)
 addToggle(cg, "FPS Counter", function() return S.fpsCounter end, T.setFps)
 addToggle(cg, "Ping Counter", function() return S.pingCounter end, T.setPing)
 end
-addSection(P, "Daily Reward")
-do
-local AC = {on = false, token = 0}
-S.autoclaim = AC
-local ACFILE = "MiniAdmin/autoclaim.txt"
-local function claim()
-task.spawn(function()
-local ok = pcall(function()
-local rs = game:GetService("ReplicatedStorage")
-local r = rs:WaitForChild("Databases", 5):WaitForChild("HalloweenEvent", 5):WaitForChild("ClaimDailyReward", 5)
-r:FireServer()
-end)
-if ok then notify("Daily reward claim sent") else notify("Daily reward not found (wrong game, or the event ended)") end
-end)
-end
-function AC.set(on)
-if on == AC.on then return end
-AC.on = on
-AC.token += 1
-pcall(function()
-if writefile and isfolder and makefolder then
-if not isfolder("MiniAdmin") then makefolder("MiniAdmin") end
-writefile(ACFILE, on and "1" or "0")
-end
-end)
-if on then
-local my = AC.token
-claim()
-task.spawn(function()
-while AC.on and AC.token == my do
-task.wait(1800)
-if AC.on and AC.token == my then claim() end
-end
-end)
-end
-end
-function AC.cleanup()
-AC.on = false
-AC.token += 1
-end
-local acg = newGroup(P, 40, 1)
-addToggle(acg, "Auto Claim Daily Reward", function() return AC.on end, AC.set)
-pcall(function()
-if isfile and readfile and isfile(ACFILE) and readfile(ACFILE):match("1") then
-task.delay(3, function() AC.set(true); refreshAll() end)
-end
-end)
-end
 local HttpService = game:GetService("HttpService")
 local CFG_DIR, CFG_SUB, AUTOLOAD = "MiniAdmin", "MiniAdmin/configs", "MiniAdmin/autoload.txt"
 local fsOK = (writefile and readfile and isfile and isfolder and makefolder and listfiles) and true or false
@@ -3178,7 +3130,6 @@ pcall(function() if S.aim then S.aim.cleanup() end end)
 pcall(function() if S.counters then S.counters.reset() end end)
 pcall(function() if S.openAnim then S.openAnim.cancel() end end)
 pcall(function() if S.search then S.search.cleanup() end end)
-pcall(function() if S.autoclaim then S.autoclaim.cleanup() end end)
 for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
 gui:Destroy()
 espGui:Destroy()

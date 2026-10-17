@@ -1646,7 +1646,7 @@ BackgroundColor3 = C.item, BorderSizePixel = 0, Image = "",
 corner(sideAvatar, 16)
 stroke(sideAvatar, C.accent, 0.4, 1.5)
 loadAvatar(sideAvatar)
-local TAB_NAMES = {"Home", "Move", "Visual", "Other", "Players", "Misc"}
+local TAB_NAMES = {"Home", "Move", "Visual", "Search", "Other", "Players", "Misc"}
 local rebuildPlayers
 local function selectTab(name)
 for _, n in ipairs(TAB_NAMES) do
@@ -2367,6 +2367,188 @@ local sg = newGroup(VP, 58, 2)
 addSlider(sg, "Aim FOV (px)", 30, 600, A.fov, function(v) A.fov = v end)
 addSlider(sg, "Aim Speed", 1, 100, A.speed, function(v) A.speed = v end)
 end
+do
+local X = {busy = false, token = 0}
+S.search = X
+local SP = pages.Search
+local API = "https://scriptblox.com/api"
+local HttpService = game:GetService("HttpService")
+local function trim(s)
+return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+local function httpGet(url)
+local ok, res = pcall(function() return game:HttpGet(url) end)
+if ok and type(res) == "string" and res ~= "" then return res end
+local req = (syn and syn.request) or (http and http.request) or http_request or request
+if req then
+local ok2, r = pcall(req, {Url = url, Method = "GET"})
+if ok2 and type(r) == "table" and r.Body and (r.StatusCode == nil or r.StatusCode == 200) then
+return r.Body
+end
+end
+return nil
+end
+local function hex(c)
+return string.format("#%02x%02x%02x", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+end
+local function hasWord(text, w)
+return (" " .. text .. " "):find("[^%a]" .. w .. "[^%a]") ~= nil
+end
+local function flagsOf(s)
+local text = (tostring(s.title or "") .. " " .. (type(s.features) == "string" and s.features or "")):lower()
+local f = {}
+f.key = s.key == true or s.key == 1 or text:find("key system", 1, true) ~= nil
+f.patched = s.isPatched == true or s.patched == true or hasWord(text, "patched")
+f.disc = s.isDiscontinued == true or s.discontinued == true
+or hasWord(text, "discontinued") or hasWord(text, "abandoned") or hasWord(text, "deprecated")
+return f
+end
+local function getCode(s)
+if type(s.script) == "string" and s.script ~= "" then return s.script end
+local id = s.slug or s._id
+if not id then return nil end
+local body = httpGet(API .. "/script/raw/" .. HttpService:UrlEncode(tostring(id)))
+if not body then return nil end
+if body:sub(1, 1) == "{" then
+local ok, d = pcall(function() return HttpService:JSONDecode(body) end)
+if ok and type(d) == "table" and type(d.script) == "string" then return d.script end
+end
+return body
+end
+local function runScript(s)
+if not loadstring then return notify("Your executor doesn't support loadstring") end
+task.spawn(function()
+local f = flagsOf(s)
+if f.patched then notify("Heads up: this script is marked as patched") end
+if f.disc then notify("Heads up: this script looks discontinued") end
+if f.key then notify("This script uses a key system") end
+local code = getCode(s)
+if not code then return notify("Couldn't get that script's code") end
+local fn, err = loadstring(code)
+if not fn then return notify("Script error: " .. tostring(err):sub(1, 90)) end
+local ran, rerr = pcall(fn)
+if ran then notify("Script executed") else notify("Script errored: " .. tostring(rerr):sub(1, 90)) end
+end)
+end
+local function copyScript(s)
+if not setclipboard then return notify("Your executor can't copy to the clipboard") end
+task.spawn(function()
+local code = getCode(s)
+if not code then return notify("Couldn't get that script's code") end
+setclipboard(code)
+notify("Script copied")
+end)
+end
+addSection(SP, "ScriptBlox")
+local boxGroup = newGroup(SP, 40, 1)
+local boxRow = row(boxGroup)
+label(boxRow, "Search", {Size = UDim2.new(0, 56, 1, 0), Position = UDim2.new(0, 12, 0, 0)})
+local box = new("TextBox", {
+Size = UDim2.new(1, -82, 0, 28), Position = UDim2.new(0, 68, 0.5, -14),
+BackgroundColor3 = C.bg, Text = "", PlaceholderText = "script or game name",
+TextColor3 = C.text, PlaceholderColor3 = C.sub, Font = Enum.Font.GothamMedium, TextSize = 13,
+ClearTextOnFocus = false, BorderSizePixel = 0,
+}, boxRow)
+corner(box, 6)
+stroke(box, C.stroke, 0.6, 1)
+local btnGroup = newGroup(SP, 40, 2)
+X.status = label(SP, "", {
+Size = UDim2.new(1, 0, 0, 16), TextSize = 12, TextColor3 = C.sub, LayoutOrder = nextOrder(SP),
+})
+addSection(SP, "Results")
+X.list = newGroup(SP, 58, 1)
+local function rebuild(list)
+for _, c in ipairs(X.list:GetChildren()) do
+if c:IsA("Frame") then c:Destroy() end
+end
+counters[X.list] = 0
+if not list then return end
+if #list == 0 then
+local r = row(X.list)
+label(r, "No results", {Size = UDim2.new(1, -20, 1, 0), Position = UDim2.new(0, 12, 0, 0), TextColor3 = C.sub})
+return
+end
+for _, s in ipairs(list) do
+local f = flagsOf(s)
+local r = row(X.list)
+label(r, tostring(s.title or "Untitled"), {
+Size = UDim2.new(1, -130, 0, 20), Position = UDim2.new(0, 12, 0, 5),
+Font = Enum.Font.GothamBold, TextSize = 13, TextTruncate = Enum.TextTruncate.AtEnd,
+})
+local gname = (type(s.game) == "table" and s.game.name) or (s.isUniversal and "Universal") or "Unknown game"
+label(r, tostring(gname), {
+Size = UDim2.new(1, -130, 0, 14), Position = UDim2.new(0, 12, 0, 24),
+TextSize = 11, TextColor3 = C.sub, TextTruncate = Enum.TextTruncate.AtEnd,
+})
+local parts = {}
+if f.key then table.insert(parts, '<font color="#FFC83C">KEY</font>') end
+if f.patched then table.insert(parts, '<font color="' .. hex(C.danger) .. '">PATCHED</font>') end
+if f.disc then table.insert(parts, '<font color="#FF8C32">DISCONTINUED</font>') end
+if #parts == 0 then table.insert(parts, '<font color="' .. hex(C.on) .. '">No flags</font>') end
+label(r, table.concat(parts, "  |  "), {
+Size = UDim2.new(1, -130, 0, 14), Position = UDim2.new(0, 12, 0, 39),
+TextSize = 11, Font = Enum.Font.GothamBold, RichText = true, TextTruncate = Enum.TextTruncate.AtEnd,
+})
+local runB = new("TextButton", {
+Size = UDim2.new(0, 52, 0, 26), Position = UDim2.new(1, -118, 0.5, -13), Text = "Run",
+BackgroundColor3 = C.accent, TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold,
+TextSize = 13, BorderSizePixel = 0,
+}, r)
+corner(runB, 6)
+local cpB = new("TextButton", {
+Size = UDim2.new(0, 52, 0, 26), Position = UDim2.new(1, -60, 0.5, -13), Text = "Copy",
+BackgroundColor3 = C.off, TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBold,
+TextSize = 13, BorderSizePixel = 0,
+}, r)
+corner(cpB, 6)
+bind(runB.Activated, function() runScript(s) end)
+bind(cpB.Activated, function() copyScript(s) end)
+end
+end
+function X.search(q)
+q = trim(q)
+if q == "" then return notify("Type something to search first") end
+if X.busy then return notify("Still searching") end
+X.busy = true
+X.token += 1
+local my = X.token
+X.status.Text = "Searching ScriptBlox..."
+task.spawn(function()
+local body = httpGet(API .. "/script/search?q=" .. HttpService:UrlEncode(q) .. "&max=20&page=1")
+local list
+if body then
+local ok, d = pcall(function() return HttpService:JSONDecode(body) end)
+if ok and type(d) == "table" and type(d.result) == "table" and type(d.result.scripts) == "table" then
+list = d.result.scripts
+end
+end
+X.busy = false
+if X.token ~= my then return end
+if not list then
+X.status.Text = "Couldn't reach ScriptBlox (blocked, down, or no HTTP support)"
+return
+end
+X.status.Text = #list .. (#list == 1 and " result" or " results")
+rebuild(list)
+end)
+end
+function X.clear()
+X.token += 1
+X.busy = false
+box.Text = ""
+X.status.Text = ""
+rebuild(nil)
+end
+function X.cleanup()
+X.token += 1
+X.busy = false
+end
+addButton(btnGroup, "Search", C.accent, function() X.search(box.Text) end)
+addButton(btnGroup, "Clear", C.off, X.clear)
+bind(box.FocusLost, function(enter)
+if enter then X.search(box.Text) end
+end)
+end
 P = pages.Other
 do
 for _, b in pairs(tabBtns) do b.Size = UDim2.new(0, 48, 0, 36) end
@@ -2907,6 +3089,7 @@ pcall(function() if S.antilag then S.antilag.set(false) end end)
 pcall(function() if S.aim then S.aim.cleanup() end end)
 pcall(function() if S.counters then S.counters.reset() end end)
 pcall(function() if S.openAnim then S.openAnim.cancel() end end)
+pcall(function() if S.search then S.search.cleanup() end end)
 for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
 gui:Destroy()
 espGui:Destroy()
